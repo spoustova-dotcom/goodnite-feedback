@@ -1,5 +1,5 @@
-streamlit
 pandas
-plotly
 playwright
 pytest-playwright
+streamlit
+plotly
