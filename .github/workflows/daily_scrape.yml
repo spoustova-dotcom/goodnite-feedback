@@ -2,20 +2,20 @@ name: Daily Review Scrape
 
 on:
   schedule:
-    - cron: '0 7 * * *' # Běží každý den v 7:00 UTC (8:00 našeho času)
-  workflow_dispatch: # Umožňuje spustit ručně tlačítkem
+    - cron: '0 7 * * *' 
+  workflow_dispatch: 
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4 # Aktualizováno z v2 na v4
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5 # Aktualizováno z v2 na v5
         with:
-          python-version: '3.9'
+          python-version: '3.10'
 
       - name: Install dependencies
         run: |
@@ -30,5 +30,5 @@ jobs:
           git config --global user.name 'Scraper Bot'
           git config --global user.email 'bot@goodnite.cz'
           git add .
-          git commit -m "Automatická aktualizace recenzí"
+          git commit -m "Automatická aktualizace recenzí" || echo "Žádné změny k uložení"
           git push
