@@ -12,10 +12,10 @@ jobs:
       contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4 # Tato verze už Node.js 20 nehlásí!
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5 # Tato verze je taky aktuální
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
