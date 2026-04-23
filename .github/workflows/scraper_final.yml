@@ -1,0 +1,36 @@
+name: Manual and Daily Scrape
+
+on:
+  workflow_dispatch: # Umožňuje spustit ručně tlačítkem
+  schedule:
+    - cron: '0 7 * * *' # Běží každý den v 8:00 ráno
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Povoluje robotovi ukládat změny do tvých souborů
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install libraries DIRECTLY
+        run: |
+          pip install pandas playwright streamlit plotly
+          playwright install chromium
+
+      - name: Run scraper
+        run: python scraper.py
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name 'Scraper Bot'
+          git config --global user.email 'bot@goodnite.cz'
+          git add .
+          git commit -m "Automatická aktualizace recenzí" || exit 0
+          git push
