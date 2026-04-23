@@ -4,17 +4,20 @@ import os
 from playwright.sync_api import sync_playwright
 
 def scrape_booking():
-    # Zkusíme najít soubor pod oběma možnými názvy
+    # Použijeme název, který jsi nastavila
     file_path = 'apartments_links_clean.csv'
+    
     if not os.path.exists(file_path):
-        print(f"Chyba: Soubor {file_path} nenalezen!")
+        print(f"Chyba: Soubor {file_path} nebyl v kořenovém adresáři nalezen!")
         return
 
-    # Načteme CSV
-    df_links = pd.read_csv(file_path)
-    
-    # Automaticky detekujeme sloupce podle pozice (0 = první, 1 = druhý)
-    # Tím vymažeme chybu KeyError: 'Apartmán'
+    # Načtení odkazů
+    try:
+        df_links = pd.read_csv(file_path)
+    except Exception as e:
+        print(f"Chyba při čtení CSV: {e}")
+        return
+
     results = []
 
     with sync_playwright() as p:
@@ -24,18 +27,19 @@ def scrape_booking():
         page = context.new_page()
 
         for index, row in df_links.iterrows():
-            # Vezmeme data podle pozice, ne podle jména
+            # Použijeme pozici (0 = první sloupec, 1 = druhý), abychom se vyhnuli chybě v názvu
             name = row.iloc[0] 
             url = row.iloc[1]
             
             if pd.isna(url) or "booking.com" not in str(url):
                 continue
                 
-            print(f"Scrapuji: {name}...")
+            print(f"Zpracovávám: {name}...")
             try:
                 page.goto(url, wait_until="domcontentloaded", timeout=60000)
                 time.sleep(5) 
                 
+                # Hledání hodnocení
                 rating_element = page.locator('[data-testid="review-score-component"]').first
                 if rating_element.is_visible():
                     rating = rating_element.inner_text().split('\n')[0]
@@ -56,12 +60,13 @@ def scrape_booking():
     
     if results:
         new_data = pd.DataFrame(results)
-        output_file = 'Recenze ⭐ - Seznam.csv' # Ukládáme do souboru, který používá app.py
+        # Výsledky uložíme do nového souboru, který pak Streamlit zobrazí
+        output_file = 'vysledne_recenze.csv' 
         header = not os.path.exists(output_file)
         new_data.to_csv(output_file, mode='a', header=header, index=False)
-        print(f"Hotovo! Zapsáno {len(results)} záznamů.")
+        print(f"Hotovo! Zapsáno {len(results)} záznamů do {output_file}.")
     else:
-        print("Žádná data nebyla získána.")
+        print("Žádná nová data k uložení.")
 
 if __name__ == "__main__":
     scrape_booking()
