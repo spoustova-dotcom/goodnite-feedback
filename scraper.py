@@ -25,10 +25,9 @@ def scrape_booking():
     results = []
 
     with sync_playwright() as p:
-        # Spouštíme s emulací iPhonu - mobilní verze je k robotům přívětivější
         browser = p.chromium.launch(headless=True)
-        iphone_13 = p.devices['iPhone 13']
-        context = browser.new_context(**iphone_13)
+        iphone = p.devices['iPhone 13']
+        context = browser.new_context(**iphone)
         page = context.new_page()
 
         for index, row in df_links.iterrows():
@@ -38,7 +37,7 @@ def scrape_booking():
             print(f"Scrapuji: {name}")
             try:
                 page.goto(url, wait_until="commit", timeout=60000)
-                time.sleep(5)
+                time.sleep(6) # Čas na základní načtení
                 
                 # 1. Celkové skóre
                 score = "0"
@@ -46,42 +45,43 @@ def scrape_booking():
                 if score_el.is_visible():
                     match = re.search(r"(\d+\.\d+|\d+)", score_el.inner_text().replace(',', '.'))
                     if match: score = match.group(1)
+                    score_el.click() # Otevřeme detaily
+                    time.sleep(5) # ZDE JE KLÍČOVÉ ČEKÁNÍ NA OKNO
 
-                # 2. KLIKNUTÍ PRO DETAILY (Čistota + Texty)
-                # Klikneme na skóre, aby se otevřelo okno s recenzemi
-                if score_el.is_visible():
-                    score_el.click()
-                    time.sleep(4)
-
-                # 3. Čistota v detailu
-                clean_score = "0"
-                # Hledáme text Čistota v nově otevřeném okně
+                # 2. Sběr kategorií z okna
+                details = {"Clean": "0", "Staff": "0"}
+                
+                # Hledáme Čistotu
                 clean_row = page.locator('div:has-text("Čistota"), div:has-text("Cleanliness")').last
                 if clean_row.is_visible():
-                    row_text = clean_row.inner_text().replace(',', '.')
-                    match = re.search(r"(\d+\.\d+|\d+)", row_text)
-                    if match: clean_score = match.group(1)
+                    m = re.search(r"(\d+\.\d+|\d+)", clean_row.inner_text().replace(',', '.'))
+                    if m: details["Clean"] = m.group(1)
+                
+                # Hledáme Personál
+                staff_row = page.locator('div:has-text("Personál"), div:has-text("Staff")').last
+                if staff_row.is_visible():
+                    m = re.search(r"(\d+\.\d+|\d+)", staff_row.inner_text().replace(',', '.'))
+                    if m: details["Staff"] = m.group(1)
 
-                # 4. Psané recenze v detailu
+                # 3. Psané recenze
                 review_elements = page.locator('[data-testid="review-card-description"]').all()
                 all_texts = [r.inner_text().replace('\n', ' ').strip() for r in review_elements if len(r.inner_text()) > 10]
                 combined_text = " | ".join(all_texts[:3])
-                problem_cat = categorize_review(combined_text)
 
                 results.append({
                     "Datum": time.strftime("%Y-%m-%d"),
                     "Apartman": name,
                     "Celkove": score,
-                    "Cistota": clean_score,
+                    "Cistota": details["Clean"],
+                    "Personal": details["Staff"],
                     "Text_Recenze": combined_text if combined_text else "Bez textu",
-                    "Kategorie_Problemu": problem_cat
+                    "Kategorie_Problemu": categorize_review(combined_text)
                 })
-                print(f"Úspěch: {name} ({score} / Čistota: {clean_score})")
+                print(f"Uloženo: {name} ({score} / C:{details['Clean']} / P:{details['Staff']})")
                 
             except Exception as e:
                 print(f"Chyba u {name}: {e}")
             
-            # Zavřeme stránku a otevřeme novou pro další apartmán, abychom vyčistili paměť
             page.close()
             page = context.new_page()
 
