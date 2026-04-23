@@ -14,55 +14,50 @@ if os.path.exists('vysledne_recenze.csv'):
     for col in ['Celkove', 'Cistota', 'Personal']:
         df[col] = pd.to_numeric(df[col], errors='coerce')
 
-    # --- 1. ALERT PANEL (Varování) ---
+    # --- 1. ALERT PANEL ---
     st.subheader("⚠️ Pozornost vyžadují (Hodnocení pod 8.5)")
-    last_data = df.sort_values('Datum').groupby('Apartman').last().reset_index()
-    alerts = last_data[(last_data['Celkove'] < 8.5) | (last_data['Cistota'] < 8.5)]
+    last_date = df['Datum'].max()
+    last_data = df[df['Datum'] == last_date]
     
+    alerts = last_data[(last_data['Celkove'] < 8.5) | (last_data['Cistota'] < 8.5)]
     if not alerts.empty:
         for _, alert in alerts.iterrows():
-            st.warning(f"**{alert['Apartman']}**: Celkové: {alert['Celkove']} | Čistota: {alert['Cistota']} (Poslední měření: {alert['Datum'].strftime('%d.%m.')})")
+            st.warning(f"**{alert['Apartman']}**: Celkové: {alert['Celkove']} | Čistota: {alert['Cistota']}")
     else:
-        st.success("Všechny apartmány mají aktuálně skvělá čísla!")
+        st.success("Všechny apartmány mají dnes skvělá čísla!")
 
     st.divider()
 
-    # --- 2. HEATMAPA (Barevný přehled) ---
-    st.subheader("🗺️ Přehled portfolia (Heatmapa)")
+    # --- 2. SROVNÁVACÍ GRAF (DNES) ---
+    st.subheader("📊 Dnešní srovnání apartmánů")
+    metric = st.selectbox("Vyber metriku pro srovnání:", ["Celkove", "Cistota", "Personal"])
+    
+    # Tento graf uvidíš i s daty z jednoho dne!
+    fig_bar = px.bar(last_data.sort_values(metric, ascending=False), 
+                     x='Apartman', y=metric, color=metric,
+                     color_continuous_scale='RdYlGn', range_y=[0,10.5])
+    st.plotly_chart(fig_bar, use_container_width=True)
+
+    # --- 3. TRENDY (HISTORIE) ---
+    st.subheader("📈 Vývoj v čase (Trend)")
+    if df['Datum'].nunique() > 1:
+        fig_line = px.line(df, x='Datum', y=metric, color='Apartman', markers=True, range_y=[0, 10.5])
+        st.plotly_chart(fig_line, use_container_width=True)
+    else:
+        st.info("Trendový graf se vykreslí zítra, jakmile budeme mít data z druhého dne.")
+
+    # --- 4. HEATMAPA ---
+    st.subheader("🗺️ Detailní přehled portfolia")
     heatmap_df = last_data[['Apartman', 'Celkove', 'Cistota', 'Personal']].set_index('Apartman')
-    
-    # Stylizovaná tabulka s barvami
-    def color_scale(val):
-        color = 'red' if val < 8.5 else 'orange' if val < 9.0 else 'green'
-        return f'color: {color}; font-weight: bold'
+    st.dataframe(heatmap_df.style.background_gradient(cmap='RdYlGn', low=0.5, high=0.5), use_container_width=True)
 
-    st.dataframe(heatmap_df.style.applymap(color_scale), use_container_width=True)
-
-    # --- 3. TRENDY ---
-    st.subheader("📈 Vývoj v čase (Osa 0-10)")
-    metric_to_plot = st.radio("Zobrazit graf pro:", ["Celkove", "Cistota", "Personal"], horizontal=True)
-    
-    fig = px.line(df, x='Datum', y=metric_to_plot, color='Apartman', markers=True, range_y=[0, 10.5], height=500)
-    st.plotly_chart(fig, use_container_width=True)
-
-    # --- 4. ANALÝZA TEXTŮ ---
+    # --- 5. ANALÝZA TEXTŮ ---
     st.divider()
-    col_a, col_b = st.columns(2)
-    
-    with col_a:
-        st.subheader("🔍 Nejčastější problémy")
-        issues = df['Kategorie_Problemu'].str.split(', ').explode()
-        issues = issues[issues != "Bez specifických problémů"]
-        if not issues.empty:
-            fig_issues = px.pie(issues.value_counts().reset_index(), names='index', values='Kategorie_Problemu', hole=0.4)
-            st.plotly_chart(fig_issues, use_container_width=True)
-    
-    with col_b:
-        st.subheader("💬 Poslední psané recenze")
-        for _, row in df.sort_values('Datum', ascending=False).head(5).iterrows():
-            st.markdown(f"**{row['Apartman']}** ({row['Celkove']}⭐)")
-            st.caption(row['Text_Recenze'][:250] + "...")
-            st.divider()
+    st.subheader("💬 Poslední psané recenze")
+    for _, row in df.sort_values('Datum', ascending=False).head(5).iterrows():
+        with st.expander(f"{row['Apartman']} ({row['Celkove']}⭐) - {row['Datum'].strftime('%d.%m.')}"):
+            st.write(f"**Kategorie:** {row['Kategorie_Problemu']}")
+            st.info(row['Text_Recenze'])
 
 else:
     st.info("Databáze se vytváří. Spusťte Robota v Actions.")
