@@ -25,21 +25,25 @@ def scrape_booking():
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        context = browser.new_context(viewport={'width': 1920, 'height': 1080}, user_agent="Mozilla/5.0...")
+        context = browser.new_context(viewport={'width': 1280, 'height': 800}, user_agent="Mozilla/5.0...")
         page = context.new_page()
 
         for index, row in df_links.iterrows():
             name, url = row.iloc[0], row.iloc[1]
             if "booking.com" not in str(url): continue
             
+            print(f"Scrapuji: {name}")
             try:
-                page.goto(url, wait_until="networkidle", timeout=60000)
+                page.goto(url, wait_until="domcontentloaded", timeout=60000)
                 time.sleep(5)
                 
-                # Sběr skóre
-                score = page.locator('[data-testid="review-score-component"]').first.inner_text().split('\n')[0].replace(',', '.')
+                # Skóre
+                score = "0"
+                score_el = page.locator('[data-testid="review-score-component"]').first
+                if score_el.is_visible():
+                    score = score_el.inner_text().split('\n')[0].replace(',', '.')
                 
-                # Sběr čistoty (Booking ji má v detailech)
+                # Čistota
                 clean_score = "0"
                 cat_elements = page.locator('[data-testid="v2_review_category_score_inner"]').all()
                 for el in cat_elements:
@@ -47,9 +51,9 @@ def scrape_booking():
                     if "Čistota" in txt or "Cleanliness" in txt:
                         clean_score = txt.split('\n')[-1].replace(',', '.')
 
-                # Sběr a kategorizace textů
+                # Recenze (Opraveno!)
                 review_elements = page.locator('[data-testid="review-card-description"]').all()
-                all_texts = [r.inner_text().replace('\n', ' ') for r in review_texts[:3]]
+                all_texts = [r.inner_text().replace('\n', ' ') for r in review_elements[:3]]
                 combined_text = " | ".join(all_texts)
                 problem_cat = categorize_review(combined_text)
 
@@ -61,7 +65,6 @@ def scrape_booking():
                     "Text_Recenze": combined_text if combined_text else "Bez textu",
                     "Kategorie_Problemu": problem_cat
                 })
-                print(f"Dohledáno: {name} -> {score} (Čistota: {clean_score})")
             except Exception as e:
                 print(f"Chyba u {name}: {e}")
 
@@ -70,7 +73,6 @@ def scrape_booking():
     if results:
         new_df = pd.DataFrame(results)
         output = 'vysledne_recenze.csv'
-        # Tady je ta databáze - připisujeme pod sebe (mode='a')
         new_df.to_csv(output, mode='a', header=not os.path.exists(output), index=False, encoding='utf-8-sig')
 
 if __name__ == "__main__":
