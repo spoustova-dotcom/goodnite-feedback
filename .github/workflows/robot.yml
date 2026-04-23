@@ -1,0 +1,36 @@
+name: Goodnite Robot
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 7 * * *'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install libraries
+        run: |
+          pip install pandas playwright streamlit plotly
+          playwright install chromium
+
+      - name: Run scraper
+        run: python scraper.py
+
+      - name: Commit changes
+        run: |
+          git config --global user.name 'Scraper Bot'
+          git config --global user.email 'bot@goodnite.cz'
+          git add .
+          git commit -m "Aktualizace dat" || exit 0
+          git push
