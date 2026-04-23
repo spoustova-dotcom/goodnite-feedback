@@ -12,16 +12,16 @@ jobs:
       contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4 # Tato verze už Node.js 20 nehlásí
+        uses: actions/checkout@v4 # Tato verze už Node.js 20 nehlásí!
 
       - name: Set up Python
-        uses: actions/setup-python@v5 # Tato verze je také aktuální
+        uses: actions/setup-python@v5 # Tato verze je taky aktuální
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
+      - name: Install libraries DIRECTLY
         run: |
-          pip install pandas playwright
+          pip install pandas playwright streamlit plotly
           playwright install chromium
 
       - name: Run scraper
