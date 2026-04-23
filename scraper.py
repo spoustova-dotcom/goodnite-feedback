@@ -25,8 +25,10 @@ def scrape_booking():
     results = []
 
     with sync_playwright() as p:
+        # Spouštíme s emulací iPhonu - mobilní verze je k robotům přívětivější
         browser = p.chromium.launch(headless=True)
-        context = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+        iphone_13 = p.devices['iPhone 13']
+        context = browser.new_context(**iphone_13)
         page = context.new_page()
 
         for index, row in df_links.iterrows():
@@ -35,35 +37,34 @@ def scrape_booking():
             
             print(f"Scrapuji: {name}")
             try:
-                page.goto(url, wait_until="networkidle", timeout=60000)
+                page.goto(url, wait_until="commit", timeout=60000)
+                time.sleep(5)
                 
-                # --- KLÍČOVÝ KROK: SKROLOVÁNÍ ---
-                # Booking načítá detaily (čistotu a texty) až při skrolu
-                for _ in range(3):
-                    page.mouse.wheel(0, 1000)
-                    time.sleep(2)
-                
-                # Celkové skóre
+                # 1. Celkové skóre
                 score = "0"
                 score_el = page.locator('[data-testid="review-score-component"]').first
                 if score_el.is_visible():
                     match = re.search(r"(\d+\.\d+|\d+)", score_el.inner_text().replace(',', '.'))
                     if match: score = match.group(1)
-                
-                # Čistota (Hledáme v tabulce, která se teď díky skrolu načetla)
+
+                # 2. KLIKNUTÍ PRO DETAILY (Čistota + Texty)
+                # Klikneme na skóre, aby se otevřelo okno s recenzemi
+                if score_el.is_visible():
+                    score_el.click()
+                    time.sleep(4)
+
+                # 3. Čistota v detailu
                 clean_score = "0"
-                # Hledáme text "Čistota" a pak jeho sourozence s číslem
-                clean_el = page.get_by_text("Čistota", exact=False).first
-                if clean_el.is_visible():
-                    # Zkusíme najít číslo v okolí textu Čistota
-                    parent_text = clean_el.locator("xpath=..").inner_text()
-                    match = re.search(r"(\d+\.\d+|\d+)", parent_text.replace(',', '.'))
+                # Hledáme text Čistota v nově otevřeném okně
+                clean_row = page.locator('div:has-text("Čistota"), div:has-text("Cleanliness")').last
+                if clean_row.is_visible():
+                    row_text = clean_row.inner_text().replace(',', '.')
+                    match = re.search(r"(\d+\.\d+|\d+)", row_text)
                     if match: clean_score = match.group(1)
 
-                # Textové recenze (pozitivní i negativní)
-                # Používáme širší selektor pro různé verze designu Bookingu
-                review_elements = page.locator('[data-testid="review-card-description"], .review_item_main_content, .c-review-block__full-text').all()
-                all_texts = [r.inner_text().replace('\n', ' ').strip() for r in review_elements if len(r.inner_text()) > 5]
+                # 4. Psané recenze v detailu
+                review_elements = page.locator('[data-testid="review-card-description"]').all()
+                all_texts = [r.inner_text().replace('\n', ' ').strip() for r in review_elements if len(r.inner_text()) > 10]
                 combined_text = " | ".join(all_texts[:3])
                 problem_cat = categorize_review(combined_text)
 
@@ -76,8 +77,13 @@ def scrape_booking():
                     "Kategorie_Problemu": problem_cat
                 })
                 print(f"Úspěch: {name} ({score} / Čistota: {clean_score})")
+                
             except Exception as e:
                 print(f"Chyba u {name}: {e}")
+            
+            # Zavřeme stránku a otevřeme novou pro další apartmán, abychom vyčistili paměť
+            page.close()
+            page = context.new_page()
 
         browser.close()
     
